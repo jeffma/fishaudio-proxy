@@ -164,6 +164,26 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
+// 根路径 - 返回服务信息
+app.get('/', (req, res) => {
+  res.json({
+    service: 'fishaudio-proxy',
+    version: '1.0.0',
+    description: 'A proxy server for Fish Audio API with multi-key management',
+    endpoints: {
+      tts: '/v1/tts',
+      stt: '/v1/stt',
+      liveTTS: '/v1/tts-live (WebSocket)',
+      health: '/health'
+    },
+    usage: {
+      authorization: 'Bearer YOUR_API_KEY_1,YOUR_API_KEY_2,YOUR_API_KEY_3',
+      model: 's1, speech-1.6, or speech-1.5 (in header)'
+    },
+    documentation: 'https://docs.fish.audio/api-reference/introduction'
+  });
+});
+
 // 健康检查端点
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'fishaudio-proxy' });

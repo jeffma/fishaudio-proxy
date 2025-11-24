@@ -83,6 +83,27 @@ const proxyOptions = {
   }
 };
 
+// 根路径 - 返回服务信息
+app.get('/', (req, res) => {
+  res.json({
+    service: 'fishaudio-proxy',
+    version: '1.0.0',
+    description: 'A proxy server for Fish Audio API with multi-key management',
+    endpoints: {
+      tts: '/v1/tts',
+      stt: '/v1/stt',
+      liveTTS: '/v1/tts-live (WebSocket - Docker only)',
+      health: '/health'
+    },
+    usage: {
+      authorization: 'Bearer YOUR_API_KEY_1,YOUR_API_KEY_2,YOUR_API_KEY_3',
+      model: 's1, speech-1.6, or speech-1.5 (in header)'
+    },
+    documentation: 'https://docs.fish.audio/api-reference/introduction',
+    note: 'WebSocket support is only available in Docker deployment, not in Vercel'
+  });
+});
+
 // 处理 HTTP 请求（TTS 和 STT）
 app.use('/v1', createProxyMiddleware(proxyOptions));
 

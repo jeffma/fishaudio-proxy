@@ -20,7 +20,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// 解析 JSON 请求体
+// 解析 JSON 请求体（请求是 JSON，响应可能是二进制）
 app.use(express.json());
 
 // 从 Authorization header 中提取并随机选择 API key
@@ -57,6 +57,8 @@ const proxyOptions = {
   pathRewrite: {
     '^/v1': '/v1', // 保持路径不变
   },
+  // 对于二进制响应，确保流式传输
+  buffer: false, // 禁用缓冲，直接流式传输
   onProxyReq: (proxyReq, req, res) => {
     // 从请求头中获取 API keys
     const authHeader = req.headers['authorization'] || req.headers['x-fish-api-key'];
@@ -82,8 +84,19 @@ const proxyOptions = {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   },
   onProxyRes: (proxyRes, req, res) => {
-    // 记录响应状态
-    console.log(`[${new Date().toISOString()}] Response: ${proxyRes.statusCode}`);
+    // 记录响应状态和类型
+    console.log(`[${new Date().toISOString()}] Response: ${proxyRes.statusCode}, Content-Type: ${proxyRes.headers['content-type']}`);
+    
+    // 对于二进制响应（音频），确保正确设置响应头
+    if (proxyRes.headers['content-type'] && 
+        (proxyRes.headers['content-type'].startsWith('audio/') || 
+         proxyRes.headers['content-type'].startsWith('application/octet-stream'))) {
+      // 确保响应头正确传递
+      res.setHeader('Content-Type', proxyRes.headers['content-type']);
+      res.setHeader('Content-Length', proxyRes.headers['content-length'] || '');
+      // 禁用压缩，确保二进制数据正确传输
+      res.removeHeader('Content-Encoding');
+    }
   },
   onError: (err, req, res) => {
     console.error(`[${new Date().toISOString()}] Proxy error:`, err.message);

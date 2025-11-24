@@ -1,0 +1,28 @@
+{
+  "name": "fishaudio-proxy",
+  "version": "1.0.0",
+  "description": "A proxy server for Fish Audio API with multi-key management",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "keywords": [
+    "fish-audio",
+    "proxy",
+    "api",
+    "tts",
+    "stt"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

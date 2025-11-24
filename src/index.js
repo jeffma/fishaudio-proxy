@@ -1,3 +1,16 @@
+// 抑制来自依赖包的弃用警告
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function(warning, type, code, ctor) {
+  // 忽略 util._extend 相关的弃用警告（来自 http-proxy-middleware 的依赖）
+  if (type === 'DeprecationWarning' && 
+      (warning && warning.toString().includes('util._extend') || 
+       (typeof warning === 'string' && warning.includes('util._extend')))) {
+    return;
+  }
+  // 其他警告正常显示
+  return originalEmitWarning.apply(process, arguments);
+};
+
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const WebSocket = require('ws');

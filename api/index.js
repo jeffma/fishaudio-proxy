@@ -59,6 +59,9 @@ const proxyOptions = {
   },
   // 对于二进制响应，确保流式传输
   buffer: false, // 禁用缓冲，直接流式传输
+  // 禁用 keep-alive，确保连接在响应完成后关闭
+  xfwd: true, // 添加 X-Forwarded-* headers
+  ws: false, // 禁用 WebSocket 代理（Vercel 不支持）
   onProxyReq: (proxyReq, req, res) => {
     // 从请求头中获取 API keys
     const authHeader = req.headers['authorization'] || req.headers['x-fish-api-key'];
@@ -93,10 +96,30 @@ const proxyOptions = {
          proxyRes.headers['content-type'].startsWith('application/octet-stream'))) {
       // 确保响应头正确传递
       res.setHeader('Content-Type', proxyRes.headers['content-type']);
-      res.setHeader('Content-Length', proxyRes.headers['content-length'] || '');
+      if (proxyRes.headers['content-length']) {
+        res.setHeader('Content-Length', proxyRes.headers['content-length']);
+      }
       // 禁用压缩，确保二进制数据正确传输
       res.removeHeader('Content-Encoding');
+      // 禁用 keep-alive，确保连接在响应完成后关闭
+      res.setHeader('Connection', 'close');
     }
+    
+    // 监听响应结束，确保连接正确关闭
+    proxyRes.on('end', () => {
+      console.log(`[${new Date().toISOString()}] Proxy response ended`);
+      if (!res.headersSent) {
+        res.end();
+      }
+    });
+    
+    // 监听响应错误
+    proxyRes.on('error', (err) => {
+      console.error(`[${new Date().toISOString()}] Proxy response error:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Proxy response error', message: err.message });
+      }
+    });
   },
   onError: (err, req, res) => {
     console.error(`[${new Date().toISOString()}] Proxy error:`, err.message);

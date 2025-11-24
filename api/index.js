@@ -58,6 +58,7 @@ const proxyOptions = {
     '^/v1': '/v1', // 保持路径不变
   },
   // 对于二进制响应，确保流式传输
+  selfHandleResponse: false, // 让 http-proxy-middleware 自动处理响应
   buffer: false, // 禁用缓冲，直接流式传输
   // 禁用 keep-alive，确保连接在响应完成后关闭
   xfwd: true, // 添加 X-Forwarded-* headers
@@ -83,6 +84,9 @@ const proxyOptions = {
     // 移除可能存在的代理相关 header
     proxyReq.removeHeader('x-fish-api-key');
     
+    // 禁用 keep-alive
+    proxyReq.setHeader('Connection', 'close');
+    
     // 记录请求信息
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   },
@@ -104,22 +108,6 @@ const proxyOptions = {
       // 禁用 keep-alive，确保连接在响应完成后关闭
       res.setHeader('Connection', 'close');
     }
-    
-    // 监听响应结束，确保连接正确关闭
-    proxyRes.on('end', () => {
-      console.log(`[${new Date().toISOString()}] Proxy response ended`);
-      if (!res.headersSent) {
-        res.end();
-      }
-    });
-    
-    // 监听响应错误
-    proxyRes.on('error', (err) => {
-      console.error(`[${new Date().toISOString()}] Proxy response error:`, err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Proxy response error', message: err.message });
-      }
-    });
   },
   onError: (err, req, res) => {
     console.error(`[${new Date().toISOString()}] Proxy error:`, err.message);

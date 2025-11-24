@@ -57,6 +57,7 @@ const proxyOptions = {
     '^/v1': '/v1', // 保持路径不变
   },
   // 对于二进制响应，确保流式传输
+  selfHandleResponse: false, // 让 http-proxy-middleware 自动处理响应
   buffer: false, // 禁用缓冲，直接流式传输
   // 禁用 keep-alive，确保连接在响应完成后关闭
   xfwd: true, // 添加 X-Forwarded-* headers
@@ -81,6 +82,9 @@ const proxyOptions = {
     // 移除可能存在的代理相关 header
     proxyReq.removeHeader('x-fish-api-key');
     
+    // 禁用 keep-alive
+    proxyReq.setHeader('Connection', 'close');
+    
     // 记录请求信息
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   },
@@ -102,19 +106,6 @@ const proxyOptions = {
       // 禁用 keep-alive，确保连接在响应完成后关闭
       res.setHeader('Connection', 'close');
     }
-    
-    // 监听响应结束，确保连接正确关闭
-    proxyRes.on('end', () => {
-      console.log(`[${new Date().toISOString()}] Proxy response ended`);
-    });
-    
-    // 监听响应错误
-    proxyRes.on('error', (err) => {
-      console.error(`[${new Date().toISOString()}] Proxy response error:`, err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Proxy response error', message: err.message });
-      }
-    });
   },
   onError: (err, req, res) => {
     console.error(`[${new Date().toISOString()}] Proxy error:`, err.message);
@@ -128,6 +119,81 @@ const proxyOptions = {
 };
 
 // 处理 HTTP 请求（TTS 和 STT）
+// 对于 /v1/tts 端点，使用特殊的流式处理
+app.post('/v1/tts', async (req, res, next) => {
+  // 手动处理 TTS 请求，确保二进制响应正确传输
+  const authHeader = req.headers['authorization'] || req.headers['x-fish-api-key'];
+  const selectedKey = getRandomApiKey(authHeader);
+  
+  if (!selectedKey) {
+    return res.status(401).json({ error: 'Unauthorized - API key required' });
+  }
+
+  try {
+    const https = require('https');
+    const options = {
+      hostname: 'api.fish.audio',
+      path: '/v1/tts',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${selectedKey}`,
+        'Content-Type': 'application/json',
+        'Connection': 'close'
+      }
+    };
+
+    if (req.headers['model']) {
+      options.headers['model'] = req.headers['model'];
+    }
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      // 设置响应头
+      res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'audio/mpeg');
+      if (proxyRes.headers['content-length']) {
+        res.setHeader('Content-Length', proxyRes.headers['content-length']);
+      }
+      res.setHeader('Connection', 'close');
+      res.status(proxyRes.statusCode);
+
+      // 流式传输响应数据
+      proxyRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      proxyRes.on('end', () => {
+        res.end();
+        console.log(`[${new Date().toISOString()}] TTS response completed`);
+      });
+
+      proxyRes.on('error', (err) => {
+        console.error(`[${new Date().toISOString()}] Proxy response error:`, err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Proxy response error', message: err.message });
+        } else {
+          res.end();
+        }
+      });
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error(`[${new Date().toISOString()}] Proxy request error:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Proxy request error', message: err.message });
+      }
+    });
+
+    // 发送请求体
+    proxyReq.write(JSON.stringify(req.body));
+    proxyReq.end();
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] TTS handler error:`, err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Handler error', message: err.message });
+    }
+  }
+});
+
+// 其他 /v1 路径使用标准代理
 app.use('/v1', createProxyMiddleware(proxyOptions));
 
 // WebSocket 代理处理（用于 live TTS）
